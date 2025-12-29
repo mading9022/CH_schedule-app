@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>護理排班系統 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F3F4F6; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Shift Colors */
+        .shift-7-16 { background-color: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+        .shift-D { background-color: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
+        .shift-E { background-color: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF; }
+        .shift-Off { background-color: #F3F4F6; color: #6B7280; border: 1px solid #E5E7EB; }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <header class="glass-effect z-50 px-4 py-3 shadow-sm border-b border-gray-200 flex justify-between items-center shrink-0">
+        <div class="flex items-center space-x-2">
+            <div class="bg-blue-600 text-white p-2 rounded-lg shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h1 class="text-lg font-bold tracking-wide text-gray-800">排班管理</h1>
+        </div>
+        <div class="flex items-center space-x-2">
+             <input type="month" id="monthPicker" class="bg-gray-100 border-none text-sm font-medium rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none">
+             <button onclick="toggleEditMode()" id="editBtn" class="text-sm text-blue-600 font-medium px-2">編輯人員</button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden flex flex-col relative">
+        
+        <div class="flex border-b border-gray-200 bg-white shrink-0">
+            <div class="w-24 shrink-0 p-3 font-bold text-gray-500 text-xs flex items-center justify-center bg-gray-50 border-r border-gray-100 z-10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                人員
+            </div>
+            <div id="dateHeader" class="flex overflow-x-auto hide-scrollbar scroll-smooth">
+                </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto overflow-x-hidden relative" id="scheduleContainer">
+            </div>
+
+        <button onclick="resetData()" class="absolute bottom-6 right-6 bg-red-500 hover:bg-red-600 text-white rounded-full p-4 shadow-lg transition transform hover:scale-105 active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        </button>
+    </main>
+
+    <div id="shiftModal" class="fixed inset-0 bg-black/40 z-[60] hidden flex items-end sm:items-center justify-center transition-opacity duration-300">
+        <div class="bg-white w-full sm:w-80 sm:rounded-2xl rounded-t-2xl p-6 shadow-2xl transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="modalContent">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-800">選擇班別</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="selectShift('7-16')" class="p-4 rounded-xl bg-blue-50 text-blue-700 font-bold border border-blue-200 hover:bg-blue-100 transition">7-16</button>
+                <button onclick="selectShift('D')" class="p-4 rounded-xl bg-yellow-50 text-yellow-700 font-bold border border-yellow-200 hover:bg-yellow-100 transition">D</button>
+                <button onclick="selectShift('E')" class="p-4 rounded-xl bg-purple-50 text-purple-700 font-bold border border-purple-200 hover:bg-purple-100 transition">E</button>
+                <button onclick="selectShift('Off')" class="p-4 rounded-xl bg-gray-50 text-gray-600 font-bold border border-gray-200 hover:bg-gray-100 transition">Off</button>
+                <button onclick="selectShift('')" class="col-span-2 p-3 rounded-xl border border-dashed border-gray-300 text-gray-400 font-medium hover:bg-gray-50">清除</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="staffModal" class="fixed inset-0 bg-black/40 z-[60] hidden flex items-center justify-center">
+        <div class="bg-white w-80 rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">編輯人員清單</h3>
+            <div id="staffListInputs" class="space-y-2 max-h-60 overflow-y-auto mb-4">
+                </div>
+            <div class="flex gap-2">
+                <input type="text" id="newStaffName" placeholder="新人員姓名" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+                <button onclick="addStaff()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold">新增</button>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="closeStaffModal()" class="text-gray-500 font-medium px-4 py-2">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const defaultStaff = ["李秋燕", "莊佳惠", "蔡淑智", "黃慧雅", "吳姵瑩", "蘇玉玲"];
+        let currentData = JSON.parse(localStorage.getItem('nursingScheduleData')) || {};
+        let currentStaff = JSON.parse(localStorage.getItem('nursingStaffList')) || [...defaultStaff];
+        
+        // Initial Date Setup
+        const today = new Date();
+        const monthPicker = document.getElementById('monthPicker');
+        monthPicker.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        
+        let selectedCell = null; // { staffIndex, day }
+
+        // --- Core Functions ---
+        
+        function init() {
+            render();
+            // Sync scrolling
+            const dateHeader = document.getElementById('dateHeader');
+            const container = document.getElementById('scheduleContainer');
+            
+            // Allow container to drive header scroll
+            container.addEventListener('scroll', () => {
+                // If we had a separate scrollable body for cells, we'd sync here.
+                // But in this layout, we need to manually sync the header's horizontal scroll
+                // Wait, logic correction: We need rows to scroll horizontally together.
+            });
+        }
+
+        function getDaysInMonth(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        function getDayName(year, month, day) {
+            const date = new Date(year, month - 1, day);
+            const days = ['日', '一', '二', '三', '四', '五', '六'];
+            return days[date.getDay()];
+        }
+
+        function saveData() {
+            localStorage.setItem('nursingScheduleData', JSON.stringify(currentData));
+            localStorage.setItem('nursingStaffList', JSON.stringify(currentStaff));
+        }
+
+        function getKey() {
+            return monthPicker.value; // e.g., "2025-12"
+        }
+
+        function render() {
+            const [year, month] = monthPicker.value.split('-').map(Number);
+            const daysCount = getDaysInMonth(year, month);
+            const key = getKey();
+
+            // ensure data structure exists
+            if (!currentData[key]) currentData[key] = {};
+
+            // 1. Render Header
+            const headerEl = document.getElementById('dateHeader');
+            let headerHTML = '';
+            for (let d = 1; d <= daysCount; d++) {
+                const dayName = getDayName(year, month, d);
+                const isWeekend = dayName === '六' || dayName === '日';
+                headerHTML += `
+                    <div class="w-14 shrink-0 flex flex-col items-center justify-center py-2 border-r border-gray-100 ${isWeekend ? 'bg-gray-50 text-red-500' : ''}">
+                        <span class="text-xs font-bold">${dayName}</span>
+                        <span class="text-sm font-medium">${d}</span>
+                    </div>
+                `;
+            }
+            headerEl.innerHTML = headerHTML;
+
+            // 2. Render Rows
+            const container = document.getElementById('scheduleContainer');
+            let rowsHTML = '';
+            
+            currentStaff.forEach((staff, index) => {
+                // Ensure staff data exists
+                if (!currentData[key][staff]) currentData[key][staff] = Array(daysCount + 1).fill('');
+
+                rowsHTML += `<div class="flex border-b border-gray-100 bg-white">`;
+                
+                // Sticky Name Column
+                rowsHTML += `
+                    <div class="w-24 shrink-0 p-3 flex items-center font-medium text-gray-700 text-sm bg-white border-r border-gray-100 sticky left-0 z-10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]">
+                        ${staff}
+                    </div>
+                `;
+                
+                // Day Cells
+                rowsHTML += `<div class="flex overflow-x-visible">`; // Changed to allow scrolling parent to handle it
+                for (let d = 1; d <= daysCount; d++) {
+                    const shift = currentData[key][staff][d] || '';
+                    let shiftClass = '';
+                    if (shift === '7-16') shiftClass = 'shift-7-16';
+                    else if (shift === 'D') shiftClass = 'shift-D';
+                    else if (shift === 'E') shiftClass = 'shift-E';
+                    else if (shift === 'Off') shiftClass = 'shift-Off';
+
+                    rowsHTML += `
+                        <div onclick="openShiftModal('${staff}', ${d})" class="w-14 shrink-0 h-14 border-r border-gray-100 flex items-center justify-center cursor-pointer active:bg-gray-100 transition-colors">
+                            <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold leading-tight select-none ${shiftClass}">
+                                ${shift}
+                            </div>
+                        </div>
+                    `;
+                }
+                rowsHTML += `</div></div>`;
+            });
+            
+            // We need a wrapper to sync scrolling for all rows. 
+            // Simplified approach: The container scrolls vertically. 
+            // The rows need to scroll horizontally.
+            // To make the header match the rows, we'll use a specific JS sync or layout trick.
+            // Layout Fix: Use a single big grid or table logic for perfect alignment.
+            // Let's refactor the layout slightly in JS to be table-based for alignment but keeping div structure.
+            
+            // Re-render approach: 
+            // We will make ONE container that scrolls both ways, with sticky headers.
+            const totalWidth = 24 * 4 + daysCount * 14 * 4; // approximate
+            
+            let html = `<div class="inline-block min-w-full align-middle">`;
+            // ... Constructing a table-like structure using Flex is tricky for 2D scrolling.
+            // Let's use CSS Grid for the content.
+            
+            // Better approach for Mobile App feel:
+            // Left column is fixed. Right part scrolls.
+            
+            let gridHTML = '';
+            currentStaff.forEach((staff) => {
+                gridHTML += `<div class="flex border-b border-gray-100 h-14 bg-white">`; // Row
+                // Name is handled by sticky CSS outside this loop or separate col?
+                // Actually, let's put the name inside but make it sticky.
+                 gridHTML += `
+                    <div class="w-24 shrink-0 p-3 flex items-center font-medium text-gray-700 text-sm bg-gray-50 border-r border-gray-200 sticky left-0 z-10 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                        ${staff}
+                    </div>
+                `;
+                
+                for (let d = 1; d <= daysCount; d++) {
+                    const shift = currentData[key][staff][d] || '';
+                    let shiftClass = '';
+                    if (shift === '7-16') shiftClass = 'shift-7-16';
+                    else if (shift === 'D') shiftClass = 'shift-D';
+                    else if (shift === 'E') shiftClass = 'shift-E';
+                    else if (shift === 'Off') shiftClass = 'shift-Off';
+                     
+                     gridHTML += `
+                        <div onclick="openShiftModal('${staff}', ${d})" class="w-14 shrink-0 border-r border-gray-100 flex items-center justify-center cursor-pointer active:bg-gray-50">
+                            <div class="w-11 h-11 rounded-lg flex items-center justify-center text-[10px] sm:text-xs font-bold leading-tight select-none transition-transform transform active:scale-95 ${shiftClass}">
+                                ${shift}
+                            </div>
+                        </div>
+                    `;
+                }
+                gridHTML += `</div>`;
+            });
+            
+            container.innerHTML = gridHTML;
+            
+            // Sync Header scroll
+            const scrollableArea = document.getElementById('scheduleContainer');
+            scrollableArea.addEventListener('scroll', (e) => {
+                document.getElementById('dateHeader').scrollLeft = e.target.scrollLeft;
+            });
+        }
+
+        // --- Interaction ---
+        
+        function openShiftModal(staffName, day) {
+            selectedCell = { staffName, day };
+            const modal = document.getElementById('shiftModal');
+            const content = document.getElementById('modalContent');
+            modal.classList.remove('hidden');
+            // Small animation trigger
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('shiftModal');
+            const content = document.getElementById('modalContent');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+            selectedCell = null;
+        }
+
+        function selectShift(shift) {
+            if (!selectedCell) return;
+            const key = getKey();
+            const { staffName, day } = selectedCell;
+            
+            currentData[key][staffName][day] = shift;
+            saveData();
+            render();
+            closeModal();
+        }
+
+        function toggleEditMode() {
+            const modal = document.getElementById('staffModal');
+            const listContainer = document.getElementById('staffListInputs');
+            listContainer.innerHTML = '';
+            
+            currentStaff.forEach((staff, index) => {
+                listContainer.innerHTML += `
+                    <div class="flex items-center gap-2">
+                        <input type="text" value="${staff}" onchange="updateStaffName(${index}, this.value)" class="flex-1 border-b border-gray-300 py-1 text-sm focus:border-blue-500 outline-none">
+                        <button onclick="removeStaff(${index})" class="text-red-500 text-sm font-bold px-2">✕</button>
+                    </div>
+                `;
+            });
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeStaffModal() {
+            document.getElementById('staffModal').classList.add('hidden');
+            render();
+        }
+
+        function updateStaffName(index, newName) {
+            if(!newName.trim()) return;
+            const oldName = currentStaff[index];
+            currentStaff[index] = newName;
+            
+            // Migrate data if needed (optional complexity, for now we just update name list)
+            // Ideally, we should update the keys in currentData object too.
+            const key = getKey();
+            if (currentData[key] && currentData[key][oldName]) {
+                currentData[key][newName] = currentData[key][oldName];
+                delete currentData[key][oldName];
+            }
+            saveData();
+        }
+
+        function addStaff() {
+            const input = document.getElementById('newStaffName');
+            const name = input.value.trim();
+            if (name && !currentStaff.includes(name)) {
+                currentStaff.push(name);
+                input.value = '';
+                toggleEditMode(); // Re-render list
+                saveData();
+            }
+        }
+
+        function removeStaff(index) {
+            if (confirm('確定要刪除這位人員嗎？(該人員的排班資料將保留但在表上不可見)')) {
+                currentStaff.splice(index, 1);
+                toggleEditMode();
+                saveData();
+            }
+        }
+        
+        function resetData() {
+            if(confirm("確定要清除所有資料嗎？這將無法復原。")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        // Listeners
+        monthPicker.addEventListener('change', render);
+        
+        // Start
+        init();
+
+    </script>
+</body>
+</html>
