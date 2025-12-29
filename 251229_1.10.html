@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>護理技術人員排班表 (加密版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F3F4F6; -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { height: 6px; width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .shift-7-16 { background-color: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+        .shift-D { background-color: #FEF3C7; color: #B45309; border: 1px solid #FDE68A; }
+        .shift-E { background-color: #F3E8FF; color: #7E22CE; border: 1px solid #E9D5FF; }
+        .shift-Off { background-color: #F3F4F6; color: #6B7280; border: 1px solid #E5E7EB; }
+        
+        .glass-effect { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .sortable-ghost { opacity: 0.4; background: #e5e7eb; }
+        .drag-handle { cursor: grab; touch-action: none; }
+
+        #loadingOverlay { backdrop-filter: blur(5px); background: rgba(255,255,255,0.7); }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <div id="loginScreen" class="fixed inset-0 z-[999] bg-gray-900 flex flex-col items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-8 shadow-2xl w-full max-w-sm text-center">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">護理排班系統</h2>
+            <p class="text-gray-500 text-sm mb-6">請輸入密碼以存取資料</p>
+            <input type="password" id="passwordInput" placeholder="輸入密碼" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none text-center">
+            <button onclick="checkLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform active:scale-95">進入系統</button>
+            <p id="loginError" class="text-red-500 text-sm mt-3 hidden">密碼錯誤</p>
+        </div>
+        <p class="text-gray-500 text-xs mt-8">僅供內部人員使用</p>
+    </div>
+
+    <header class="glass-effect z-50 px-4 py-3 shadow-sm border-b border-gray-200 flex flex-wrap gap-2 justify-between items-center shrink-0">
+        <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-widest text-gray-800 hidden sm:block">護理技術人員排班表</h1>
+            <h1 class="text-lg font-bold tracking-widest text-gray-800 sm:hidden">護理技術人員排班表</h1>
+        </div>
+        <div class="flex items-center space-x-2 edit-controls overflow-x-auto hide-scrollbar">
+             <button onclick="exportJSON()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow transition whitespace-nowrap">備份</button>
+             <button onclick="triggerImport()" class="bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-md shadow transition whitespace-nowrap">還原</button>
+             <input type="file" id="fileInput" class="hidden" accept=".json" onchange="importJSON(this)">
+             <div class="h-4 w-px bg-gray-300 mx-1"></div>
+
+             <button onclick="exportImage()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow transition flex items-center gap-1 whitespace-nowrap">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                分享/存圖
+             </button>
+             
+             <input type="month" id="monthPicker" onchange="render()" class="bg-gray-100 border-none text-sm font-medium rounded-md px-2 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none w-32 cursor-pointer">
+             
+             <select id="halfPicker" onchange="render()" class="bg-blue-50 text-blue-800 border-none text-sm font-bold rounded-md px-2 py-1.5 cursor-pointer outline-none focus:ring-2 focus:ring-blue-500">
+                 <option value="1">上半月 (1-15)</option>
+                 <option value="2">下半月 (16-月底)</option>
+             </select>
+
+             <button onclick="toggleEditMode()" id="editBtn" class="text-sm text-blue-600 font-medium px-2 whitespace-nowrap">管理人員</button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden flex flex-col relative" id="mainContainer">
+        <div id="captureTitle" class="hidden py-2 bg-white border-b border-gray-100">
+            <h2 class="text-xl font-bold text-gray-800 tracking-wider text-center">護理技術人員排班表</h2>
+            <p class="text-sm text-gray-500 mt-1 text-left px-2 font-medium" id="captureSubtitle"></p>
+        </div>
+        <div class="flex border-b border-gray-200 bg-white shrink-0" id="headerRow">
+            <div class="w-24 shrink-0 p-3 font-bold text-gray-500 text-xs flex items-center justify-center bg-gray-50 border-r border-gray-100 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] sticky-col">
+                人員 / 日期
+            </div>
+            <div id="dateHeader" class="flex overflow-x-auto hide-scrollbar scroll-smooth"></div>
+        </div>
+        <div class="flex-1 overflow-auto relative" id="scheduleContainer">
+            <div id="staffGrid" class="inline-block min-w-full"></div>
+        </div>
+        <button onclick="resetData()" class="fab-btn absolute bottom-6 right-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full p-3 shadow-lg border border-red-200 no-print transition transform hover:scale-105 active:scale-95">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        </button>
+    </main>
+
+    <div id="shiftModal" class="fixed inset-0 bg-black/40 z-[60] hidden flex items-end sm:items-center justify-center">
+        <div class="bg-white w-full sm:w-80 sm:rounded-2xl rounded-t-2xl p-6 shadow-2xl" id="modalContent">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="selectShift('7-16')" class="p-4 rounded-xl bg-blue-50 text-blue-700 font-bold border border-blue-200 hover:bg-blue-100">7-16</button>
+                <button onclick="selectShift('D')" class="p-4 rounded-xl bg-yellow-50 text-yellow-700 font-bold border border-yellow-200 hover:bg-yellow-100">D</button>
+                <button onclick="selectShift('E')" class="p-4 rounded-xl bg-purple-50 text-purple-700 font-bold border border-purple-200 hover:bg-purple-100">E</button>
+                <button onclick="selectShift('Off')" class="p-4 rounded-xl bg-gray-50 text-gray-600 font-bold border border-gray-200 hover:bg-gray-100">Off</button>
+                <button onclick="selectShift('')" class="col-span-2 p-3 rounded-xl border border-dashed border-gray-300 text-gray-400 font-medium">清除</button>
+            </div>
+            <button onclick="closeModal()" class="mt-4 w-full py-3 text-gray-500 font-medium">取消</button>
+        </div>
+    </div>
+    
+    <div id="staffModal" class="fixed inset-0 bg-black/40 z-[60] hidden flex items-center justify-center">
+        <div class="bg-white w-80 rounded-2xl p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">管理人員清單</h3>
+            <div id="staffListInputs" class="space-y-2 max-h-60 overflow-y-auto mb-4 p-1"></div>
+            <div class="flex gap-2">
+                <input type="text" id="newStaffName" placeholder="輸入姓名" onkeypress="handleInputKey(event)" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <button onclick="addStaff()" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold">新增</button>
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button onclick="closeStaffModal()" class="text-gray-500 font-medium px-4 py-2 hover:bg-gray-100 rounded-lg">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingOverlay" class="fixed inset-0 z-[100] hidden flex flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
+        <p class="text-blue-800 font-bold animate-pulse">正在產生圖片...</p>
+    </div>
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-lg text-sm opacity-0 transition-opacity duration-300 pointer-events-none z-[70]">已儲存設定</div>
+
+    <script>
+        // 設定系統密碼
+        const SITE_PASSWORD = '8888';
+        
+        function checkLogin() {
+            const input = document.getElementById('passwordInput');
+            const error = document.getElementById('loginError');
+            if(input.value === SITE_PASSWORD) {
+                document.getElementById('loginScreen').style.display = 'none';
+                // 儲存登入狀態 (選擇性)
+                // localStorage.setItem('isLoggedIn', 'true');
+            } else {
+                error.classList.remove('hidden');
+                input.value = '';
+                input.focus();
+            }
+        }
+        
+        // 支援按 Enter 登入
+        document.getElementById('passwordInput').addEventListener('keyup', function(e) {
+            if(e.key === 'Enter') checkLogin();
+        });
+
+        const defaultStaff = ["李秋燕", "莊佳惠", "蔡淑智", "黃慧雅", "吳姵瑩", "蘇玉玲"];
+        let currentData = {};
+        let currentStaff = [];
+
+        function loadData() {
+            try {
+                currentData = JSON.parse(localStorage.getItem('nursingScheduleData')) || {};
+                currentStaff = JSON.parse(localStorage.getItem('nursingStaffList')) || [...defaultStaff];
+            } catch (e) {
+                currentData = {};
+                currentStaff = [...defaultStaff];
+            }
+        }
+        
+        const today = new Date();
+        const monthPicker = document.getElementById('monthPicker');
+        monthPicker.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        
+        let selectedCell = null; 
+        let sortableInstance = null;
+
+        function init() {
+            loadData();
+            render();
+            const scrollableArea = document.getElementById('scheduleContainer');
+            scrollableArea.addEventListener('scroll', (e) => {
+                document.getElementById('dateHeader').scrollLeft = e.target.scrollLeft;
+            });
+        }
+
+        function setupSortable() {
+            const grid = document.getElementById('staffGrid');
+            if (sortableInstance) sortableInstance.destroy();
+            sortableInstance = new Sortable(grid, {
+                animation: 150,
+                handle: '.drag-handle',
+                delay: 200, delayOnTouchOnly: true,
+                onEnd: function (evt) {
+                    const newOrder = [];
+                    grid.querySelectorAll('[data-staff]').forEach(row => newOrder.push(row.getAttribute('data-staff')));
+                    currentStaff = newOrder;
+                    saveData(false);
+                }
+            });
+        }
+
+        function getDaysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+        function getDayName(year, month, day) { return ['日', '一', '二', '三', '四', '五', '六'][new Date(year, month - 1, day).getDay()]; }
+
+        function saveData(showToast = true) {
+            localStorage.setItem('nursingScheduleData', JSON.stringify(currentData));
+            localStorage.setItem('nursingStaffList', JSON.stringify(currentStaff));
+            if (showToast) showToastMsg('已儲存設定');
+        }
+
+        function showToastMsg(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => toast.classList.add('opacity-0'), 1500);
+        }
+
+        function render() {
+            const [year, month] = monthPicker.value.split('-').map(Number);
+            const daysCount = getDaysInMonth(year, month);
+            const key = monthPicker.value;
+            const isSecondHalf = document.getElementById('halfPicker').value === "2";
+            const taiwanYear = year - 1911;
+            const halfLabel = isSecondHalf ? "下半月" : "上半月";
+            document.getElementById('captureSubtitle').innerText = `${taiwanYear}年 ${month}月 (${halfLabel})`;
+
+            if (!currentData[key]) currentData[key] = {};
+            let startDay = isSecondHalf ? 16 : 1;
+            let endDay = isSecondHalf ? daysCount : 15;
+
+            const headerEl = document.getElementById('dateHeader');
+            let headerHTML = '';
+            for (let d = startDay; d <= endDay; d++) {
+                const dayName = getDayName(year, month, d);
+                const isWeekend = dayName === '六' || dayName === '日';
+                headerHTML += `<div class="w-16 shrink-0 flex flex-col items-center justify-center py-2 border-r border-gray-100 ${isWeekend ? 'bg-gray-50 text-red-500' : ''}"><span class="text-xs font-bold">${dayName}</span><span class="text-sm font-medium">${d}</span></div>`;
+            }
+            headerEl.innerHTML = headerHTML;
+
+            const container = document.getElementById('staffGrid');
+            let gridHTML = '';
+            currentStaff.forEach((staff) => {
+                if (!currentData[key][staff]) currentData[key][staff] = {};
+                for (let d = startDay; d <= endDay; d++) {
+                    const dayName = getDayName(year, month, d);
+                    if (dayName === '日' && currentData[key][staff][d] === undefined) currentData[key][staff][d] = 'Off';
+                }
+
+                gridHTML += `<div class="flex border-b border-gray-100 h-16 bg-white" data-staff="${staff}">
+                    <div class="w-24 shrink-0 p-3 flex items-center justify-between font-medium text-gray-700 text-sm bg-gray-50 border-r border-gray-200 sticky left-0 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] sticky-col drag-handle"><span class="truncate">${staff}</span></div>`;
+                
+                for (let d = startDay; d <= endDay; d++) {
+                    const shift = currentData[key][staff][d] || '';
+                    let shiftClass = '';
+                    if (shift === '7-16') shiftClass = 'shift-7-16';
+                    else if (shift === 'D') shiftClass = 'shift-D';
+                    else if (shift === 'E') shiftClass = 'shift-E';
+                    else if (shift === 'Off') shiftClass = 'shift-Off';
+                    gridHTML += `<div onclick="openShiftModal('${staff}', ${d})" class="w-16 shrink-0 border-r border-gray-100 flex items-center justify-center cursor-pointer active:bg-gray-50"><div class="w-12 h-12 rounded-lg flex items-center justify-center text-xs font-bold leading-tight select-none transition-transform transform active:scale-95 ${shiftClass}">${shift}</div></div>`;
+                }
+                gridHTML += `</div>`;
+            });
+            container.innerHTML = gridHTML;
+            setupSortable();
+        }
+
+        async function exportImage() {
+            const loading = document.getElementById('loadingOverlay');
+            loading.classList.remove('hidden');
+
+            try {
+                const originalHeader = document.getElementById('headerRow');
+                const originalBody = document.getElementById('scheduleContainer');
+                const captureTitle = document.getElementById('captureTitle');
+
+                const cloneContainer = document.createElement('div');
+                cloneContainer.style.position = 'absolute';
+                cloneContainer.style.top = '-9999px';
+                cloneContainer.style.left = '0';
+                cloneContainer.style.display = 'inline-block';
+                cloneContainer.style.width = 'max-content';
+                cloneContainer.style.backgroundColor = '#ffffff';
+                cloneContainer.style.padding = '10px'; 
+                cloneContainer.style.zIndex = '-1';
+                
+                const titleClone = captureTitle.cloneNode(true);
+                titleClone.classList.remove('hidden');
+                titleClone.style.display = 'block';
+                titleClone.style.width = '100%'; 
+
+                const subtitleEl = titleClone.querySelector('#captureSubtitle');
+                if (subtitleEl) subtitleEl.innerText = subtitleEl.innerText.split(' (')[0];
+
+                cloneContainer.appendChild(titleClone);
+                const fixedNameWidth = '140px'; 
+
+                const headerClone = originalHeader.cloneNode(true);
+                headerClone.style.overflow = 'visible';
+                headerClone.style.width = 'max-content'; 
+                
+                headerClone.querySelectorAll('.sticky-col').forEach(el => {
+                    el.classList.remove('sticky', 'left-0', 'shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]');
+                    el.style.position = 'static';
+                    el.style.boxShadow = 'none';
+                    el.style.borderRight = '1px solid #e5e7eb';
+                    el.classList.remove('w-24'); 
+                    el.style.width = fixedNameWidth;
+                    el.style.minWidth = fixedNameWidth;
+                    el.style.flexShrink = '0'; 
+                });
+                const dateHeaderInClone = headerClone.querySelector('#dateHeader');
+                dateHeaderInClone.classList.remove('overflow-x-auto');
+                dateHeaderInClone.style.overflow = 'visible';
+                cloneContainer.appendChild(headerClone);
+
+                const bodyClone = originalBody.cloneNode(true);
+                bodyClone.style.overflow = 'visible';
+                bodyClone.style.height = 'auto';
+                bodyClone.style.width = 'max-content';
+                
+                bodyClone.querySelectorAll('.sticky-col').forEach(el => {
+                    el.classList.remove('sticky', 'left-0', 'shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]');
+                    el.style.position = 'static';
+                    el.style.boxShadow = 'none';
+                    el.style.borderRight = '1px solid #e5e7eb';
+                    el.classList.remove('w-24');
+                    el.style.width = fixedNameWidth;
+                    el.style.minWidth = fixedNameWidth;
+                    el.style.flexShrink = '0';
+                    const span = el.querySelector('span.truncate');
+                    if(span) span.classList.remove('truncate');
+                    const svg = el.querySelector('svg');
+                    if(svg) svg.remove();
+                });
+
+                const gridInClone = bodyClone.querySelector('#staffGrid');
+                gridInClone.style.minWidth = 'auto';
+                
+                cloneContainer.appendChild(bodyClone);
+                document.body.appendChild(cloneContainer);
+
+                const canvas = await html2canvas(cloneContainer, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    onclone: (clonedDoc) => {
+                        return new Promise((resolve) => setTimeout(resolve, 100));
+                    }
+                });
+
+                canvas.toBlob(async (blob) => {
+                    const fileName = `護理技術人員排班表_${monthPicker.value}.png`;
+                    const file = new File([blob], fileName, { type: 'image/png' });
+
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        try {
+                            await navigator.share({
+                                files: [file],
+                                title: '護理技術人員排班表',
+                                text: `${subtitleEl.innerText} 排班表`
+                            });
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.error('Share failed', err);
+                                downloadFile(blob, fileName);
+                            }
+                        }
+                    } else {
+                        downloadFile(blob, fileName);
+                    }
+                    document.body.removeChild(cloneContainer);
+                    loading.classList.add('hidden');
+                }, 'image/png');
+
+            } catch (error) {
+                console.error("Export failed:", error);
+                alert("圖片產生失敗，請稍後再試。");
+                loading.classList.add('hidden');
+                document.querySelectorAll('div[style*="top: -9999px"]').forEach(c => c.remove());
+            }
+        }
+
+        function downloadFile(blob, fileName) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function openShiftModal(staffName, day) {
+            selectedCell = { staffName, day };
+            document.getElementById('shiftModal').classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('shiftModal').classList.add('hidden'); selectedCell = null; }
+        
+        function selectShift(shift) {
+            if (!selectedCell) return;
+            currentData[monthPicker.value][selectedCell.staffName][selectedCell.day] = shift;
+            render(); saveData(false); closeModal();
+        }
+
+        function toggleEditMode() {
+            const list = document.getElementById('staffListInputs');
+            list.innerHTML = '';
+            currentStaff.forEach((s, i) => list.innerHTML += `<div class="flex items-center gap-2 mb-2"><input type="text" value="${s}" onchange="updateStaffName(${i}, this.value)" class="flex-1 border-b border-gray-300 py-1 text-sm bg-transparent"><button onclick="removeStaff(${i})" class="text-red-500 text-sm font-bold px-2">✕</button></div>`);
+            document.getElementById('staffModal').classList.remove('hidden');
+        }
+        function closeStaffModal() { if(document.getElementById('newStaffName').value.trim()) addStaff(); document.getElementById('staffModal').classList.add('hidden'); render(); }
+        
+        function updateStaffName(i, n) {
+            n = n.trim(); if(!n || n === currentStaff[i]) return;
+            if(currentStaff.includes(n)) { alert('名稱重複'); toggleEditMode(); return; }
+            const old = currentStaff[i]; currentStaff[i] = n;
+            Object.keys(currentData).forEach(k => { if(currentData[k][old]) { currentData[k][n] = currentData[k][old]; delete currentData[k][old]; }});
+            saveData(false);
+        }
+        function addStaff() {
+            const n = document.getElementById('newStaffName').value.trim();
+            if(n && !currentStaff.includes(n)) { currentStaff.push(n); document.getElementById('newStaffName').value=''; toggleEditMode(); saveData(false); }
+        }
+        function removeStaff(i) { if(confirm('確定刪除？')) { currentStaff.splice(i, 1); toggleEditMode(); saveData(false); } }
+        function handleInputKey(e) { if(e.key === 'Enter') addStaff(); }
+
+        function resetData() { if(confirm("確定清空所有資料？")) { localStorage.removeItem('nursingScheduleData'); localStorage.removeItem('nursingStaffList'); location.reload(); }}
+        
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({staff: currentStaff, schedule: currentData}));
+            const a = document.createElement('a'); a.href = dataStr; a.download = "backup_" + new Date().toISOString().slice(0,10) + ".json";
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+        function triggerImport() { document.getElementById('fileInput').click(); }
+        function importJSON(input) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try { const b = JSON.parse(e.target.result); if(b.staff && b.schedule && confirm("確定還原？")) { currentStaff=b.staff; currentData=b.schedule; saveData(true); render(); }} 
+                catch(err) { alert("檔案錯誤"); } input.value='';
+            };
+            if(input.files[0]) reader.readAsText(input.files[0]);
+        }
+
+        init();
+    </script>
+</body>
+</html>
